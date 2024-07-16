@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script src="https://www.gstatic.com/firebasejs/9.1.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.2/firebase-firestore.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>방명록</title>
+
+    <style>
+        .header {
+            width: 250px;
+            padding: 20px;
+            margin: 20px auto;
+            border: 1px solid black;
+        }
+
+        .posting {
+            width: 400px;
+            padding: 30px;
+            margin: 50px auto;
+            border: 1px solid black;
+        }
+
+        #postingcontent {
+            width: 300px;
+            height: 150px;
+            text-align: left;
+            vertical-align: top;
+            resize: none;
+        }
+
+        .edit-content {
+            width: 555px;
+            height: 100px;
+            padding: 0px;
+            text-align: left;
+            vertical-align: top;
+            resize: none;
+
+        }
+
+        .post {
+            border: 1px solid black;
+            width: 600px;
+            padding: 20px;
+            margin: 20px auto;
+        }
+
+        #postcontent {
+            border: 1px solid black;
+            height: 100px;
+        }
+    </style>
+    <script defer src = "key.js"></script>
+    <script type="module">
+
+
+        // Firebase SDK 라이브러리 가져오기
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { collection, addDoc, doc, getDocs, query, where, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        // Firebase 구성 정보 설정
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        
+
+        // Firebase 인스턴스 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+
+        $('#submit').click(async function () {
+            let name = $('#name').val()
+            let password = $('#password').val()
+            let postingcontent = $('#postingcontent').val()
+            let date = new Date().toLocaleString();
+
+            let doc = {
+                'name': name,
+                'password': password,
+                'postingcontent': postingcontent,
+                'date': date,
+            }
+
+            await addDoc(collection(db, "board"), doc);
+            alert('저장 완료!');
+            window.location.reload();
+        })
+
+        let docs = await getDocs(collection(db, "board"));
+        docs.forEach((doc) => {
+            let row = doc.data();
+
+            let name = row['name']
+            let password = row['password']
+            let postingcontent = row['postingcontent']
+            let date = row['date']
+
+            let temp_html = `
+    <div class="post" data-id = "${doc.id}">
+        <p>${name} &ensp;| &ensp; ${date}</p>
+        <p id="postcontent">${postingcontent}</p>
+        <button id = "edit">수정</button>
+        &emsp;
+        <button id = "delete">삭제</button>
+    </div>
+    `;
+            $('#posts').append(temp_html);
+        })
+
+        $(document).on('click', '#edit', function () {
+            let postId = $(this).closest('.post').data('id');
+            console.log(postId);
+
+            if ($(this).siblings('.password-input').length === 0) {
+                let passwordField = `
+            <div class="password-input">
+                <input type="password" class="password-check" placeholder="비밀번호를 입력해주세요.">
+                <button class="password-verify">확인</button>
+            </div>
+        `;
+                $(this).after(passwordField);
+                $(this).siblings('#delete').hide();
+            }
+        });
+        $(document).on('click', '.password-verify', async function () {
+
+            let inputPassword = $(this).siblings('.password-check').val();
+            let postId = $(this).closest('.post').data('id');
+            console.log("Entered password:", inputPassword, "for post ID:", postId);
+
+
+
+            let postRef = doc(db, "board", postId);
+            let postDoc = await getDoc(postRef);
+            if (postDoc.exists()) {
+                let actualPassword = postDoc.data().password;
+                if (inputPassword === actualPassword) {
+
+                    let currentContent = postDoc.data().postingcontent;
+                    let editForm = `
+                <textarea type="text" class="edit-content" value="${currentContent}"></textarea>
+                <button class="save">Save</button>
+            `;
+                    let postElement = $(this).closest('.post');
+                    postElement.find('#postcontent').html(editForm);
+                    postElement.find('#edit, #delete').hide();
+                    $(this).closest('.password-input').remove();
+
+                } else {
+                    alert("Incorrect password.");
+                }
+            } else {
+                console.log("No such document!");
+            }
+        });
+
+
+        $(document).on('click', '.save', async function () {
+            let newContent = $(this).siblings('.edit-content').val();
+            let postId = $(this).closest('.post').data('id');
+            console.log("New content:", newContent, "for post ID:", postId);
+
+
+            let postRef = doc(db, "board", postId);
+            await updateDoc(postRef, { postingcontent: newContent });
+
+
+            $(this).closest('.edit-input').remove();
+            $(this).closest('.post').find('#postcontent').text(newContent);
+            window.location.reload();
+        });
+
+
+
+        $(document).on('click', '#delete', function () {
+            let postId = $(this).closest('.post').data('id');
+            console.log(postId);
+
+
+            if ($(this).siblings('.password-input').length === 0) {
+                let passwordField = `
+            <div class="password-input">
+                <input type="password" class="password-check" placeholder="비밀번호를 입력해주세요.">
+                <button class="password-verify-delete">확인</button>
+            </div>
+        `;
+                $(this).after(passwordField);
+                $(this).siblings('#edit').hide();
+            }
+        });
+
+
+        $(document).on('click', '.password-verify-delete', async function () {
+            let inputPassword = $(this).siblings('.password-check').val();
+            let postId = $(this).closest('.post').data('id');
+            console.log("Entered password:", inputPassword, "for post ID:", postId);
+
+
+            let postRef = doc(db, "board", postId);
+            let postDoc = await getDoc(postRef);
+            if (postDoc.exists()) {
+                let actualPassword = postDoc.data().password;
+                if (inputPassword === actualPassword) {
+
+                    await deleteDoc(postRef);
+                    $(this).closest('.post').remove();
+                } else {
+                    alert("Incorrect password.");
+                }
+            } else {
+                console.log("No such document!");
+            }
+        });
+
+    </script>
+
+
+</head>
+
+<body>
+    <div class="header">
+        <h1>방명록 테스트</h1>
+        <p>간단한 방명록을 작성할 수 있습니다.</p>
+    </div>
+
+    <div class="posting">
+        이름 <input type="text" size=5 id="name">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;비밀번호 <input type="text" size=10 id="password">
+        <p></p>
+        <p>내용</p>
+        <textarea placeholder="140자 내로 내용을 입력해주세요." maxlength="140" type="text" id="postingcontent"></textarea>
+        <p></p>
+        <button id="submit">확인</button>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <button id="cancle"> 취소</button>
+
+    </div>
+
+    <div id="posts" class="posts">
+
+    </div>
+
+</body>
+
+</html>
